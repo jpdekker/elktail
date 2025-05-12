@@ -107,14 +107,20 @@ elktail [options]
 
 Options:
   -h, --help            show this help message and exit
-  -p PROJECT, --project=PROJECT
-                        [optional] select the project that logs will be
-                        displayed
-  -t PROCESS_TYPE, --process_type=PROCESS_TYPE
-                        [optional] select the process type that logs will be
-                        displayed
-  -e ENVIRONMENT, --environment=ENVIRONMENT
-                        [optional] environment
+  -p PROCESS_NAME, --process=PROCESS_NAME
+                        [optional] filter by process name
+  -s SEVERITY, --severity=SEVERITY
+                        [optional] filter by log severity (e.g.,
+                        Informational, Warning, Error)
+  -H HOSTNAME, --hostname=HOSTNAME
+                        [optional] filter by hostname
+  -q QUERY_STRING, --query=QUERY_STRING
+                        [optional] string to search for in log messages
+  -f, --follow          [optional] follow log output (like tail -f)
+  -n LIMIT, --lines=LIMIT
+                        [optional] number of initial lines to show (default:
+                        10)
+  -v, --verbose         increase output verbosity (-v or -vv)
 ```
 
 * Arguments can be used at the same time or no arguments at all
