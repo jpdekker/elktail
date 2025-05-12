@@ -159,20 +159,20 @@ def mainloop(process_name=None, severity=None, hostname=None, follow=False, limi
 if __name__ == "__main__":
     parser = OptionParser()
     parser.add_option("-p", "--process", dest="process_name",
-        help="[optional] filter by process name")
+        help="filter by process name")
     parser.add_option("-s", "--severity", dest="severity",
-        help="[optional] filter by log severity (e.g., Informational, Warning, Error)")
+        help="filter by log severity level (Emergency, Alert, Critical, Error, Warning, Notice, Informational, Debug)")
     parser.add_option("-H", "--hostname", dest="hostname",
-        help="[optional] filter by hostname")
-    parser.add_option("-q", "--query", dest="query_string", # ADDED: query option
-        help="[optional] string to search for in log messages")
+        help="filter by hostname")
+    parser.add_option("-q", "--query", dest="query_string",
+        help="search for specific text in log messages")
     parser.add_option("-f", "--follow", dest="follow", action="store_true",
-        help="[optional] follow log output (like tail -f)")
+        help="follow log output (like tail -f)")
     parser.add_option("-n", "--lines", dest="limit", type="int", default=10,
-        help="[optional] number of initial lines to show (default: 10)")
+        help="number of initial lines to show (default: 10)")
     parser.add_option("-v", "--verbose", dest="verbosity",
         action="count", default=0,
-        help="increase output verbosity (-v or -vv)")
+        help="increase output verbosity (-v shows Notice and Informational, -vv adds Debug)")
     
     # Handle negative numbers for lines
     args = sys.argv[1:]

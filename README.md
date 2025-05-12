@@ -110,17 +110,19 @@ Options:
   -p PROCESS_NAME, --process=PROCESS_NAME
                         [optional] filter by process name
   -s SEVERITY, --severity=SEVERITY
-                        [optional] filter by log severity (e.g.,
-                        Informational, Warning, Error)
+                        [optional] filter by log severity level. Available levels (from most to least severe):
+                        Emergency, Alert, Critical, Error, Warning, Notice, Informational, Debug.
+                        By default shows Emergency through Warning.
+                        Use -v to include Notice and Informational.
+                        Use -vv to include Debug messages.
   -H HOSTNAME, --hostname=HOSTNAME
                         [optional] filter by hostname
   -q QUERY_STRING, --query=QUERY_STRING
                         [optional] string to search for in log messages
   -f, --follow          [optional] follow log output (like tail -f)
   -n LIMIT, --lines=LIMIT
-                        [optional] number of initial lines to show (default:
-                        10)
-  -v, --verbose         increase output verbosity (-v or -vv)
+                        [optional] number of initial lines to show (default: 10)
+  -v, --verbose         increase output verbosity (-v shows Notice and Informational, -vv adds Debug)
 ```
 
 * Arguments can be used at the same time or no arguments at all
@@ -140,7 +142,34 @@ $ elktail
 
 # ELKTAIL
 
-ELKTail is a command-line utility, similar to `tail -f`, designed for streaming and searching logs stored in Elasticsearch. It's particularly useful for developers and system administrators who need to monitor real-time log data or quickly search through recent log history.
+### Log Severity Levels
+
+ELKTail uses standard syslog severity levels (RFC 5424) for filtering logs. The severity levels, from most severe to least severe, are:
+
+* **Emergency (0)**: System is unusable
+* **Alert (1)**: Action must be taken immediately
+* **Critical (2)**: Critical conditions
+* **Error (3)**: Error conditions
+* **Warning (4)**: Warning conditions
+* **Notice (5)**: Normal but significant conditions
+* **Informational (6)**: Informational messages
+* **Debug (7)**: Debug-level messages
+
+By default (no -v flag), ELKTail shows:
+* Emergency through Warning messages
+
+With `-v`, ELKTail shows:
+* Emergency through Warning (default)
+* Notice and Informational messages
+
+With `-vv`, ELKTail shows:
+* All messages including Debug level
+
+You can explicitly filter for a specific severity using the `-s` flag:
+```bash
+elktail -s Error          # Show only Error messages
+elktail -s Warning -v     # Show Warning messages with verbosity formatting
+```
 
 ## Features
 
