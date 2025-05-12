@@ -132,4 +132,27 @@ $ elktail
 2020-06-30T21:27:05.222Z :: [2020-06-30 21:27:05,222: INFO/ForkPoolWorker-287] Task tasks.reports.check_scheduled_reports.check_something[2c55f42e-2bbf-4448-9445-5f16a90338bd] succeeded in 0.003620134957600385s: True
 ```
 
+# ELKTAIL
+
+ELKTail is a command-line utility, similar to `tail -f`, designed for streaming and searching logs stored in Elasticsearch. It's particularly useful for developers and system administrators who need to monitor real-time log data or quickly search through recent log history.
+
+## Features
+
+*   **Real-time Log Tailing**: Follow logs as they are indexed into Elasticsearch, similar to `tail -f`.
+*   **Historical Log Search**: Fetch and display a specified number of recent log entries.
+*   **Filtering**:
+    *   Filter logs by process name (`-p` or `--process`).
+    *   Filter logs by severity level (`-s` or `--severity`) (e.g., Informational, Warning, Error).
+    *   Filter logs by hostname (`-H` or `--hostname`).
+    *   **NEW**: Filter logs by a query string within the message content (`-q` or `--query`).
+*   **Configurable Output**:
+    *   Control the number of initial lines displayed (`-n` or `--lines`).
+    *   Adjust verbosity to show more or less detail (`-v`, `-vv`).
+    *   **IMPROVED**: Severity text (e.g., `[Error]`, `[Warning]`) is now always displayed for clarity.
+*   **Timezone Conversion**: Timestamps are converted to `Europe/Amsterdam` for readability.
+*   **Duplicate Prevention**: Avoids displaying duplicate log entries within a fetched batch.
+*   **IMPROVED**: More efficient fetching of the last N lines when not in follow mode, ensuring the *actual* most recent N lines are shown chronologically.
+
+## Installation
+
 
