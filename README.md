@@ -101,9 +101,9 @@ permissions. I'll explore a way of encrypting this password.
 
 ## Usage
 
+```bash
+elktail [options]
 ```
-$ elktail -h
-Usage: elktail [options]
 
 Options:
   -h, --help            show this help message and exit
