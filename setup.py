@@ -21,12 +21,12 @@ class install(_install):
 
 setup(
     name="elktail",
-    version="1.0",
-    author="Guido Accardo",
-    author_email="gaccardo@gmail.com",
+    version="1.1",
+    author="Jan Paul Dekker",
+    author_email="jpdekker@decco.net",
     license='GPLv2',
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Beta',
         'Intended Audience :: DevOps & Developers',
         'Topic :: DevOps administrative tools',
         'Programming Language :: Python :: 3.8'

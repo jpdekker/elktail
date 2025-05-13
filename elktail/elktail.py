@@ -43,8 +43,8 @@ def get_filter_level_for_severity_name(severity_name):
     return mapping.get(severity_name, 0) # Default to 0 (most important) if name is unknown
 
 # MODIFIED: Added es_query_size and es_sort_order parameters
-def get_lines(client, iso_date, process_name, severity, hostname, limit=None, verbosity=0, es_query_size=10000, es_sort_order="desc", query_string=None): # MODIFIED: Default es_sort_order to "desc"
-    last_timestamp = iso_date # Default last_timestamp to the start of the query window
+def get_lines(client, iso_date, process_name, severity, hostname, limit=None, verbosity=0, es_query_size=10000, es_sort_order="desc", query_string=None):
+    last_timestamp = iso_date
     try:
         body = elastic.get_search_body(
             iso_date,
@@ -55,11 +55,8 @@ def get_lines(client, iso_date, process_name, severity, hostname, limit=None, ve
             sort_order=es_sort_order,
             query_string=query_string
         )
-        if verbosity > 1:
-            print(f"Elasticsearch query body: {body}")
+        # Remove the debug printing of Elasticsearch query and response
         res = elastic.search(client, body)
-        if verbosity > 1:
-            print(f"Elasticsearch response: {res}")
     except Exception as e:
         if verbosity > 0:
             print(f"Error querying Elasticsearch: {e}")
@@ -92,8 +89,9 @@ def get_lines(client, iso_date, process_name, severity, hostname, limit=None, ve
             lines_from_es.append({
                 'timestamp_str': timestamp_str,
                 'formatted_line': formatted_line,
-                'severity_name': log_severity_name, # Keep original name for display logic
-                'filter_level': current_log_filter_level # Store its filter level
+                'severity_name': log_severity_name,
+                'filter_level': current_log_filter_level,
+                'message': message  # Add the raw message for deduplication
             })
         except KeyError as e:
             if verbosity > 0:
@@ -190,6 +188,10 @@ def mainloop(process_name=None, severity=None, hostname=None, follow=False, limi
     processed_timestamps = set()  # Track all processed timestamps
     display_lines = []  # Keep track of displayed lines
     
+    # Change the processed_timestamps set to store tuples of (timestamp, message)
+    processed_entries = set()
+    display_lines = []
+
     try:
         while True:
             last_timestamp, new_lines = get_lines(
@@ -198,23 +200,25 @@ def mainloop(process_name=None, severity=None, hostname=None, follow=False, limi
                 process_name,
                 severity,
                 hostname,
-                limit=None,  # Don't limit in get_lines for follow mode
+                limit=None,
                 verbosity=verbosity,
                 query_string=query_string
             )
             
             if new_lines:
-                # Process new lines and avoid duplicates
                 for line_data in new_lines:
-                    if line_data['timestamp_str'] > last_processed_timestamp and \
-                       line_data['timestamp_str'] not in processed_timestamps:
+                    # Create a unique identifier using both timestamp and message
+                    entry_id = (line_data['timestamp_str'], line_data['message'])
+                    if line_data['timestamp_str'] >= last_processed_timestamp and \
+                       entry_id not in processed_entries:
                         show_lines([line_data])
-                        processed_timestamps.add(line_data['timestamp_str'])
+                        processed_entries.add(entry_id)
                         display_lines.append(line_data)
                         # Keep the set size manageable
-                        if len(processed_timestamps) > 10000:
-                            processed_timestamps.clear()
-                            processed_timestamps.update(line['timestamp_str'] for line in display_lines[-1000:])
+                        if len(processed_entries) > 10000:
+                            processed_entries.clear()
+                            processed_entries.update((line['timestamp_str'], line['message']) 
+                                                   for line in display_lines[-1000:])
                 
                 # Update the timestamp for next query
                 if new_lines[-1]['timestamp_str'] > last_processed_timestamp:

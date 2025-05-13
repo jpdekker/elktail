@@ -10,7 +10,7 @@ def get_config():
     system_config = '/etc/elktail.conf'
     user_config = os.path.join(
         os.environ.get("HOME"),
-        ".config/elktail/config.ini"
+        "/etc/elktail.conf"
     )
     
     # Check system config first, then user config
