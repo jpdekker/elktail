@@ -66,7 +66,6 @@ def get_lines(client, iso_date, process_name, severity, hostname, limit=None, ve
         return last_timestamp, []
 
     lines_from_es = []
-    duplicate_timestamps_in_batch = set()
 
     for hit in res['hits']['hits']:
         try:
@@ -75,11 +74,6 @@ def get_lines(client, iso_date, process_name, severity, hostname, limit=None, ve
             log_severity_name = hit['_source'].get('log', {}).get('syslog', {}).get('severity', {}).get('name', 'Unknown')
             log_hostname = hit['_source'].get('host', {}).get('hostname', 'Unknown')
             log_process_name = hit['_source'].get('process', {}).get('name', 'Unknown')
-
-            if timestamp_str in duplicate_timestamps_in_batch:
-                if verbosity > 1: print(f"Skipping duplicate timestamp within batch: {timestamp_str}")
-                continue
-            duplicate_timestamps_in_batch.add(timestamp_str)
             
             # Simply convert the timestamp directly - no manual Z manipulation needed
             dt_object = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
@@ -151,9 +145,8 @@ def mainloop(process_name=None, severity=None, hostname=None, follow=False, limi
     if not follow:
         # Non-follow mode:
         iso_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
-        # Fetch more than 'limit' from ES to be robust, then take the newest 'limit' lines.
-        # This helps if ES behaves unexpectedly with very small 'size' requests.
-        es_query_size_non_follow = max(100, limit * 2) # Ensure we ask for a decent chunk
+        # Use larger query size when no filters are applied
+        es_query_size_non_follow = max(1000, limit * 10) if not any([process_name, severity, hostname, query_string]) else max(100, limit * 2)
         
         _, initial_lines = get_lines(
             client,
@@ -161,10 +154,10 @@ def mainloop(process_name=None, severity=None, hostname=None, follow=False, limi
             process_name,
             severity,
             hostname,
-            limit=limit,  # Apply the desired limit *after* fetching a larger batch
+            limit=limit,
             verbosity=verbosity,
-            es_query_size=es_query_size_non_follow, # How many to get from ES
-            es_sort_order="desc", # Fetch newest first from ES
+            es_query_size=es_query_size_non_follow,
+            es_sort_order="desc",
             query_string=query_string
         )
         show_lines(initial_lines)
