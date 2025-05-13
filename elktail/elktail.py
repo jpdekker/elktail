@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from optparse import OptionParser
 import json
 from zoneinfo import ZoneInfo  # For Python 3.9+
+import pytz # ADDED: Import pytz
 
 from elktail import elastic
 
@@ -23,110 +24,215 @@ def get_severity_level(severity_code):
         7: ('Debug', 2),        # Debug-level messages
     }.get(severity_code, ('Unknown', 2))
 
+# NEW HELPER FUNCTION
+def get_filter_level_for_severity_name(severity_name):
+    """Maps severity name to a numeric filter level."""
+    # Level 0: Always shown (Emergency, Alert, Critical, Error, Warning)
+    # Level 1: Shown with -v (Notice, Informational)
+    # Level 2: Shown with -vv (Debug)
+    mapping = {
+        'Emergency': 0,
+        'Alert': 0,
+        'Critical': 0,
+        'Error': 0,
+        'Warning': 0,
+        'Notice': 1,
+        'Informational': 1,
+        'Debug': 2,
+    }
+    return mapping.get(severity_name, 0) # Default to 0 (most important) if name is unknown
+
 # MODIFIED: Added es_query_size and es_sort_order parameters
-def get_lines(client, iso_date, process_name=None, severity=None, hostname=None, limit=None, verbosity=0, es_query_size=10000, es_sort_order="asc", query_string=None): 
-    # MODIFIED: Pass query_size, sort_order, and query_string to elastic.get_search_body
-    body = elastic.get_search_body(iso_date, process_name, severity, hostname, query_size=es_query_size, sort_order=es_sort_order, query_string=query_string)
-    response = elastic.search(client, body)
-    new_ts = None 
-    lines = list()
-    seen_entries = set()
+def get_lines(client, iso_date, process_name, severity, hostname, limit=None, verbosity=0, es_query_size=10000, es_sort_order="desc", query_string=None): # MODIFIED: Default es_sort_order to "desc"
+    last_timestamp = iso_date # Default last_timestamp to the start of the query window
+    try:
+        body = elastic.get_search_body(
+            iso_date,
+            process_name,
+            severity,
+            hostname,
+            query_size=es_query_size,
+            sort_order=es_sort_order,
+            query_string=query_string
+        )
+        if verbosity > 1:
+            print(f"Elasticsearch query body: {body}")
+        res = elastic.search(client, body)
+        if verbosity > 1:
+            print(f"Elasticsearch response: {res}")
+    except Exception as e:
+        if verbosity > 0:
+            print(f"Error querying Elasticsearch: {e}")
+        return last_timestamp, []
 
-    processed_docs = response['hits']['hits']
+    lines_from_es = []
+    duplicate_timestamps_in_batch = set()
 
-    for doc in processed_docs:
-        source = doc['_source']
-        
-        host = source.get('host', {}).get('hostname', 'unknown')
-        process = source.get('process', {}).get('name', 'unknown')
-        pid = source.get('process', {}).get('pid', '')
-        severity_code = source.get('log', {}).get('syslog', {}).get('severity', {}).get('code', 6)
-        severity_name = source.get('log', {}).get('syslog', {}).get('severity', {}).get('name', 'unknown')
-        message = source.get('message', '').strip()
-        
-        msg_severity_name, msg_verbosity = get_severity_level(severity_code)
-        if msg_verbosity > verbosity:
-            continue
-        
-        utc_time = datetime.strptime(source['@timestamp'], "%Y-%m-%dT%H:%M:%S.%fZ")
-        
-        entry_id = f"{utc_time.isoformat()}:{message}"
-        if entry_id in seen_entries:
-            continue
-        seen_entries.add(entry_id)
-        
-        local_time = utc_time.replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo('Europe/Amsterdam'))
-        ts = local_time.strftime("%b %d %H:%M:%S")
-        
-        process_info = f"{process}[{pid}]" if pid else process
-        
-        log_line = f"{ts} {host} {process_info} [{severity_name}]: {message}"
+    for hit in res['hits']['hits']:
+        try:
+            timestamp_str = hit['_source']['@timestamp']
+            message = hit['_source']['message'].strip()
+            log_severity_name = hit['_source'].get('log', {}).get('syslog', {}).get('severity', {}).get('name', 'Unknown')
+            log_hostname = hit['_source'].get('host', {}).get('hostname', 'Unknown')
+            log_process_name = hit['_source'].get('process', {}).get('name', 'Unknown')
+
+            if timestamp_str in duplicate_timestamps_in_batch:
+                if verbosity > 1: print(f"Skipping duplicate timestamp within batch: {timestamp_str}")
+                continue
+            duplicate_timestamps_in_batch.add(timestamp_str)
             
-        lines.append(log_line.rstrip())
-        
-        # This new_ts is primarily for follow mode, which uses 'asc' sort.
-        # It correctly takes the timestamp of the last processed document in that case.
-        current_doc_ts_for_new_ts = utc_time + timedelta(milliseconds=1)
-        new_ts = current_doc_ts_for_new_ts.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+            # Simply convert the timestamp directly - no manual Z manipulation needed
+            dt_object = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            local_tz = pytz.timezone('Europe/Amsterdam')
+            local_dt = dt_object.astimezone(local_tz)
+            formatted_timestamp = local_dt.strftime('%b %d %H:%M:%S')
 
-    # MODIFIED: If ES returned newest first, reverse to make lines chronological.
+            # Severity display tag logic remains the same (controls [TAG] visibility)
+            severity_display = f" [{log_severity_name}]" if verbosity > 0 or log_severity_name in ["Error", "Warning", "Critical", "Alert", "Emergency"] else ""
+            
+            formatted_line = f"{formatted_timestamp} {log_hostname} {log_process_name}{severity_display}: {message}"
+            
+            # Get the numeric filter level for this log's severity
+            current_log_filter_level = get_filter_level_for_severity_name(log_severity_name)
+
+            lines_from_es.append({
+                'timestamp_str': timestamp_str,
+                'formatted_line': formatted_line,
+                'severity_name': log_severity_name, # Keep original name for display logic
+                'filter_level': current_log_filter_level # Store its filter level
+            })
+        except KeyError as e:
+            if verbosity > 0:
+                print(f"Skipping hit due to missing key: {e} in hit: {hit}")
+            continue
+    
+    # Ensure lines_from_es is chronological if fetched in descending order
     if es_sort_order == "desc":
-        lines.reverse() 
+        lines_from_es.reverse() # Now chronological (oldest of batch to newest of batch)
 
-    # MODIFIED: Apply display limit, typically for follow mode's initial fetch
-    # when a larger batch was fetched ('asc' order) than what needs to be displayed.
-    if limit and len(lines) > limit and es_sort_order == "asc":
-        lines = lines[-limit:]
+    # Filter lines based on verbosity BEFORE applying the limit
+    filtered_by_verbosity_lines = []
+    for line_data in lines_from_es:
+        log_filter_level = line_data['filter_level']
+        if verbosity == 0: # No -v flag
+            if log_filter_level == 0:
+                filtered_by_verbosity_lines.append(line_data)
+        elif verbosity == 1: # -v flag
+            if log_filter_level <= 1:
+                filtered_by_verbosity_lines.append(line_data)
+        elif verbosity >= 2: # -vv or more
+            filtered_by_verbosity_lines.append(line_data) # Show all
 
-    return new_ts, lines
+    # Apply limit if specified to the verbosity-filtered lines
+    if limit is not None:
+        final_lines_to_return = filtered_by_verbosity_lines[-limit:]
+    else:
+        final_lines_to_return = filtered_by_verbosity_lines
 
+    # Determine last_timestamp from the actual lines being returned
+    if final_lines_to_return:
+        last_timestamp = final_lines_to_return[-1]['timestamp_str']
+    elif filtered_by_verbosity_lines: # If limit made final_lines_to_return empty, but filtered list had lines
+        last_timestamp = filtered_by_verbosity_lines[-1]['timestamp_str']
+    elif lines_from_es: # If verbosity filter removed all lines, but original fetch had lines
+        last_timestamp = lines_from_es[-1]['timestamp_str']
+    # else, last_timestamp remains iso_date (initial value)
+
+    return last_timestamp, final_lines_to_return
 
 def show_lines(lines):
-    for line in lines:
-        print(line)
+    for line_data in lines: # MODIFIED: iterate through line_data (dictionaries)
+        print(line_data['formatted_line']) # MODIFIED: print the 'formatted_line'
 
 
-def mainloop(process_name=None, severity=None, hostname=None, follow=False, limit=10, verbosity=0, query_string=None): # MODIFIED: Added query_string
+def mainloop(process_name=None, severity=None, hostname=None, follow=False, limit=10, verbosity=0, query_string=None, days=7):
     client = elastic.connect()
     
     if not follow:
         # Non-follow mode:
-        iso_date = (datetime.utcnow() - timedelta(days=7)).isoformat()
-        # Fetch 'limit' newest lines from ES. get_lines will reverse them for chronological display.
+        iso_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        # Fetch more than 'limit' from ES to be robust, then take the newest 'limit' lines.
+        # This helps if ES behaves unexpectedly with very small 'size' requests.
+        es_query_size_non_follow = max(100, limit * 2) # Ensure we ask for a decent chunk
+        
         _, initial_lines = get_lines(
             client,
             iso_date,
             process_name,
             severity,
             hostname,
-            limit=None,  # Display limit is handled by es_query_size for 'desc' sort
+            limit=limit,  # Apply the desired limit *after* fetching a larger batch
             verbosity=verbosity,
-            es_query_size=limit, # Ask ES for exactly 'limit' lines
-            es_sort_order="desc", # Ask ES for newest first
-            query_string=query_string # MODIFIED: Pass query_string
+            es_query_size=es_query_size_non_follow, # How many to get from ES
+            es_sort_order="desc", # Fetch newest first from ES
+            query_string=query_string
         )
         show_lines(initial_lines)
         return
 
     # Follow mode:
-    # Initial fetch for follow mode:
-    initial_iso_date = (datetime.utcnow() - timedelta(minutes=5)).isoformat()
-    # Fetch a larger batch (e.g., 200 lines) sorted 'asc'.
-    # get_lines will then take the last 'limit' lines from this batch for display.
+    initial_iso_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    # For initial fetch in follow mode, get 'limit' lines, ask ES for a moderate batch.
     last_processed_timestamp, initial_lines = get_lines(
         client,
         initial_iso_date,
         process_name,
         severity,
         hostname,
-        limit=limit, # The number of lines to display initially
+        limit=limit, # We want to display 'limit' lines initially
         verbosity=verbosity,
-        es_query_size=200, # Fetch a larger batch to pick from
-        es_sort_order="asc", # Oldest first
-        query_string=query_string # MODIFIED: Pass query_string
+        es_query_size=200, # Fetch a moderate batch from ES
+        es_sort_order="asc", # Fetch oldest first for scanning history
+        query_string=query_string
     )
     show_lines(initial_lines)
+
+    processed_timestamps = set(line['timestamp_str'] for line in initial_lines)
+    # last_processed_timestamp is now correctly the timestamp of the newest displayed line
+    last_processed_timestamp_for_filtering = last_processed_timestamp 
+
+    # Initialize variables for follow mode
+    now = datetime.now(ZoneInfo('UTC'))
+    last_processed_timestamp = now.isoformat()
+    processed_timestamps = set()  # Track all processed timestamps
+    display_lines = []  # Keep track of displayed lines
     
+    try:
+        while True:
+            last_timestamp, new_lines = get_lines(
+                client,
+                last_processed_timestamp,
+                process_name,
+                severity,
+                hostname,
+                limit=None,  # Don't limit in get_lines for follow mode
+                verbosity=verbosity,
+                query_string=query_string
+            )
+            
+            if new_lines:
+                # Process new lines and avoid duplicates
+                for line_data in new_lines:
+                    if line_data['timestamp_str'] > last_processed_timestamp and \
+                       line_data['timestamp_str'] not in processed_timestamps:
+                        show_lines([line_data])
+                        processed_timestamps.add(line_data['timestamp_str'])
+                        display_lines.append(line_data)
+                        # Keep the set size manageable
+                        if len(processed_timestamps) > 10000:
+                            processed_timestamps.clear()
+                            processed_timestamps.update(line['timestamp_str'] for line in display_lines[-1000:])
+                
+                # Update the timestamp for next query
+                if new_lines[-1]['timestamp_str'] > last_processed_timestamp:
+                    last_processed_timestamp = new_lines[-1]['timestamp_str']
+            
+            time.sleep(0.1)  # Small delay to prevent hammering the server
+            
+    except KeyboardInterrupt:
+        print("\nExiting...")
+        return
+
     next_query_start_time = last_processed_timestamp
 
     # Follow mode - streaming new entries:
@@ -170,6 +276,8 @@ if __name__ == "__main__":
         help="follow log output (like tail -f)")
     parser.add_option("-n", "--lines", dest="limit", type="int", default=10,
         help="number of initial lines to show (default: 10)")
+    parser.add_option("-d", "--days", dest="days", type="int", default=7,
+        help="number of days to look back (default: 7)")
     parser.add_option("-v", "--verbose", dest="verbosity",
         action="count", default=0,
         help="increase output verbosity (-v shows Notice and Informational, -vv adds Debug)")
@@ -184,11 +292,12 @@ if __name__ == "__main__":
     (options, args) = parser.parse_args(args)
 
     mainloop(
-       process_name=options.process_name,
-       severity=options.severity,
-       hostname=options.hostname,
-       follow=options.follow,
-       limit=options.limit,
-       verbosity=options.verbosity,
-       query_string=options.query_string # MODIFIED: Pass query_string
+        process_name=options.process_name,
+        severity=options.severity,
+        hostname=options.hostname,
+        follow=options.follow,
+        limit=options.limit,
+        verbosity=options.verbosity,
+        query_string=options.query_string,
+        days=options.days
     )

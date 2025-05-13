@@ -67,8 +67,8 @@ Requirement already satisfied: certifi in /home/username/.pyenv/versions/3.7.7/l
 ## Configuration
 
 The first time this tool gets executed (or if the configuration file is
-missing) the initial configuration process kicks in. The following
-parameters will be requested:
+missing) the initial configuration process kicks in. The configuration file
+is stored in `/etc/elktail.conf`. The following parameters will be requested:
 
 * host: url or ip of the elasticsearch that contains the filebeat indexes
 * username: user that has permissions to connect to the given elasticsearch
@@ -76,19 +76,21 @@ parameters will be requested:
 * scheme: it's really REALLY weird the this parameter be anything by https
 * port: port where elasticsearch is listening
 
+Note: You need sudo privileges to create the configuration file as it's stored in `/etc/elktail.conf`.
+
 ```bash
-$ elktail
+$ sudo elktail
 your elktail is not configured
 would you like to configure it now? <Y/n>: y
-creating configuration file: /home/username/.config/elktail/config.ini
+creating configuration file: /etc/elktail.conf
 elasticsearch host: 127.0.0.1
 username: username
 password: MySecretPassword
 scheme (HIGLY recommended https): https
 port: 9243
 elktail configured
-$ cat $HOME/.config/elktail/config.ini
-i[default]
+$ cat /etc/elktail.conf
+[default]
 host = 127.0.0.1
 username = username
 password = MySecretPassword
@@ -106,23 +108,25 @@ elktail [options]
 ```
 
 Options:
-  -h, --help            show this help message and exit
-  -p PROCESS_NAME, --process=PROCESS_NAME
-                        [optional] filter by process name
-  -s SEVERITY, --severity=SEVERITY
-                        [optional] filter by log severity level. Available levels (from most to least severe):
-                        Emergency, Alert, Critical, Error, Warning, Notice, Informational, Debug.
-                        By default shows Emergency through Warning.
-                        Use -v to include Notice and Informational.
-                        Use -vv to include Debug messages.
-  -H HOSTNAME, --hostname=HOSTNAME
-                        [optional] filter by hostname
-  -q QUERY_STRING, --query=QUERY_STRING
-                        [optional] string to search for in log messages
-  -f, --follow          [optional] follow log output (like tail -f)
-  -n LIMIT, --lines=LIMIT
-                        [optional] number of initial lines to show (default: 10)
-  -v, --verbose         increase output verbosity (-v shows Notice and Informational, -vv adds Debug)
+  * `-h, --help`: Show this help message and exit
+  * `-p PROCESS_NAME, --process=PROCESS_NAME`: Filter by process name
+  * `-s SEVERITY, --severity=SEVERITY`: Filter by log severity level (e.g., Informational, Warning, Error)
+  * `-H HOSTNAME, --hostname=HOSTNAME`: Filter by hostname
+  * `-q QUERY_STRING, --query=QUERY_STRING`: Search for specific text in log messages
+  * `-f, --follow`: Follow log output (like tail -f)
+  * `-n LIMIT, --lines=LIMIT`: Number of initial lines to show (default: 10)
+  * `-d DAYS, --days=DAYS`: Number of days to look back (default: 7)
+  * `-v, --verbose`: Increase output verbosity (-v shows Notice and Informational, -vv adds Debug)
+
+**Time Range:**
+By default, elktail looks back 7 days for both normal and follow mode. You can adjust this using the `-d` option:
+
+```bash
+# Look back 3 days
+elktail -d 3
+
+# Follow mode with 14 days of history
+elktail -f -d 14
 ```
 
 * Arguments can be used at the same time or no arguments at all

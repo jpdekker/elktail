@@ -16,7 +16,7 @@ def connect():
         scheme=config['scheme'], port=config['port']
     )
 
-def get_search_body(iso_date, process_name=None, severity=None, hostname=None, query_size=10000, sort_order="asc", query_string=None): # MODIFIED: Added query_string
+def get_search_body(iso_date, process_name, severity, hostname, query_size, sort_order, query_string=None): # MODIFIED: sort_order is now required (no default)
     body = {
         "size": query_size,
         "sort": [
@@ -32,7 +32,7 @@ def get_search_body(iso_date, process_name=None, severity=None, hostname=None, q
                     {
                         "range": {
                             "@timestamp": {
-                                "gte": f"{iso_date}Z"
+                                "gte": f"{iso_date}"
                             }
                         }
                     }
