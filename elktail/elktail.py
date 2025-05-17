@@ -46,16 +46,24 @@ def get_filter_level_for_severity_name(severity_name):
 def get_lines(client, iso_date, process_name, severity, hostname, limit=None, verbosity=0, es_query_size=10000, es_sort_order="desc", query_string=None):
     last_timestamp = iso_date
     try:
+        # Calculate severity levels to include based on verbosity
+        severity_levels = []
+        if verbosity >= 2:  # -vv shows all
+            severity_levels = ["Emergency", "Alert", "Critical", "Error", "Warning", "Notice", "Informational", "Debug"]
+        elif verbosity == 1:  # -v shows Notice and above
+            severity_levels = ["Emergency", "Alert", "Critical", "Error", "Warning", "Notice", "Informational"]
+        else:  # No -v shows only Warning and above
+            severity_levels = ["Emergency", "Alert", "Critical", "Error", "Warning"]
+        
         body = elastic.get_search_body(
             iso_date,
             process_name,
-            severity,
+            severity_levels,
             hostname,
-            query_size=es_query_size,
+            query_size=limit if limit else es_query_size,  # Use exact limit from user
             sort_order=es_sort_order,
             query_string=query_string
         )
-        # Remove the debug printing of Elasticsearch query and response
         res = elastic.search(client, body)
     except Exception as e:
         if verbosity > 0:
@@ -63,6 +71,7 @@ def get_lines(client, iso_date, process_name, severity, hostname, limit=None, ve
         return last_timestamp, []
 
     lines_from_es = []
+    seen_entries = set()  # Track unique entries by message content
 
     for hit in res['hits']['hits']:
         try:
@@ -78,21 +87,24 @@ def get_lines(client, iso_date, process_name, severity, hostname, limit=None, ve
             local_dt = dt_object.astimezone(local_tz)
             formatted_timestamp = local_dt.strftime('%b %d %H:%M:%S')
 
-            # Severity display tag logic remains the same (controls [TAG] visibility)
+            # Severity display tag logic remains the same
             severity_display = f" [{log_severity_name}]" if verbosity > 0 or log_severity_name in ["Error", "Warning", "Critical", "Alert", "Emergency"] else ""
             
             formatted_line = f"{formatted_timestamp} {log_hostname} {log_process_name}{severity_display}: {message}"
-            
-            # Get the numeric filter level for this log's severity
-            current_log_filter_level = get_filter_level_for_severity_name(log_severity_name)
 
-            lines_from_es.append({
-                'timestamp_str': timestamp_str,
-                'formatted_line': formatted_line,
-                'severity_name': log_severity_name,
-                'filter_level': current_log_filter_level,
-                'message': message  # Add the raw message for deduplication
-            })
+            # Only deduplicate in follow mode
+            entry_id = message if es_sort_order == "asc" else None
+            
+            if entry_id is None or entry_id not in seen_entries:
+                if entry_id is not None:
+                    seen_entries.add(entry_id)
+                    
+                lines_from_es.append({
+                    'timestamp_str': timestamp_str,
+                    'formatted_line': formatted_line,
+                    'severity_name': log_severity_name,
+                    'message': message
+                })
         except KeyError as e:
             if verbosity > 0:
                 print(f"Skipping hit due to missing key: {e} in hit: {hit}")
@@ -100,37 +112,13 @@ def get_lines(client, iso_date, process_name, severity, hostname, limit=None, ve
     
     # Ensure lines_from_es is chronological if fetched in descending order
     if es_sort_order == "desc":
-        lines_from_es.reverse() # Now chronological (oldest of batch to newest of batch)
+        lines_from_es.reverse()
 
-    # Filter lines based on verbosity BEFORE applying the limit
-    filtered_by_verbosity_lines = []
-    for line_data in lines_from_es:
-        log_filter_level = line_data['filter_level']
-        if verbosity == 0: # No -v flag
-            if log_filter_level == 0:
-                filtered_by_verbosity_lines.append(line_data)
-        elif verbosity == 1: # -v flag
-            if log_filter_level <= 1:
-                filtered_by_verbosity_lines.append(line_data)
-        elif verbosity >= 2: # -vv or more
-            filtered_by_verbosity_lines.append(line_data) # Show all
-
-    # Apply limit if specified to the verbosity-filtered lines
-    if limit is not None:
-        final_lines_to_return = filtered_by_verbosity_lines[-limit:]
-    else:
-        final_lines_to_return = filtered_by_verbosity_lines
-
-    # Determine last_timestamp from the actual lines being returned
-    if final_lines_to_return:
-        last_timestamp = final_lines_to_return[-1]['timestamp_str']
-    elif filtered_by_verbosity_lines: # If limit made final_lines_to_return empty, but filtered list had lines
-        last_timestamp = filtered_by_verbosity_lines[-1]['timestamp_str']
-    elif lines_from_es: # If verbosity filter removed all lines, but original fetch had lines
+    # Update last_timestamp from the final lines
+    if lines_from_es:
         last_timestamp = lines_from_es[-1]['timestamp_str']
-    # else, last_timestamp remains iso_date (initial value)
-
-    return last_timestamp, final_lines_to_return
+    
+    return last_timestamp, lines_from_es
 
 def show_lines(lines):
     for line_data in lines: # MODIFIED: iterate through line_data (dictionaries)
@@ -143,9 +131,6 @@ def mainloop(process_name=None, severity=None, hostname=None, follow=False, limi
     if not follow:
         # Non-follow mode:
         iso_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
-        # Use larger query size when no filters are applied
-        es_query_size_non_follow = max(1000, limit * 10) if not any([process_name, severity, hostname, query_string]) else max(100, limit * 2)
-        
         _, initial_lines = get_lines(
             client,
             iso_date,
@@ -154,7 +139,6 @@ def mainloop(process_name=None, severity=None, hostname=None, follow=False, limi
             hostname,
             limit=limit,
             verbosity=verbosity,
-            es_query_size=es_query_size_non_follow,
             es_sort_order="desc",
             query_string=query_string
         )
