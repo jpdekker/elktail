@@ -21,47 +21,14 @@ permissions. Its final destination will be /usr/local/elktail.
 
 ### Download the latest release
 
-* [1.0](https://github.com/BridgeMarketing/elktail/releases/tag/v1.0)
+* [0.3](https://git.decco.net/jpdekker/elktail.git)
 
 ### Clone the project
 
 ```bash
 $ git clone git@github.com:BridgeMarketing/elktail.git
 $ cd elktail/
-$ sudo python setup.py install
-running install
-running build
-running build_py
-copying elktail/elktail.py -> build/lib/elktail
-copying elktail/create_bin.py -> build/lib/elktail
-copying elktail/configuration.py -> build/lib/elktail
-copying elktail/elastic.py -> build/lib/elktail
-copying elktail/__init__.py -> build/lib/elktail
-running install_lib
-copying build/lib/elktail/elktail.py -> /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail
-copying build/lib/elktail/create_bin.py -> /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail
-copying build/lib/elktail/configuration.py -> /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail
-copying build/lib/elktail/elastic.py -> /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail
-copying build/lib/elktail/__init__.py -> /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail
-byte-compiling /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail/elktail.py to elktail.cpython-37.pyc
-byte-compiling /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail/create_bin.py to create_bin.cpython-37.pyc
-byte-compiling /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail/configuration.py to configuration.cpython-37.pyc
-byte-compiling /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail/elastic.py to elastic.cpython-37.pyc
-byte-compiling /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail/__init__.py to __init__.cpython-37.pyc
-running install_egg_info
-running egg_info
-writing elktail.egg-info/PKG-INFO
-writing dependency_links to elktail.egg-info/dependency_links.txt
-writing top-level names to elktail.egg-info/top_level.txt
-reading manifest file 'elktail.egg-info/SOURCES.txt'
-writing manifest file 'elktail.egg-info/SOURCES.txt'
-Copying elktail.egg-info to /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail-0.3-py3.7.egg-info
-Running post install task. Generating exec
-/home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages/elktail
-Copying binaries
-Requirement already satisfied: elasticsearch==7.7.1 in /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages (from -r etc/requirements.txt (line 1)) (7.7.1)
-Requirement already satisfied: urllib3>=1.21.1 in /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages (from elasticsearch==7.7.1->-r etc/requirements.txt (line 1)) (1.25.9)
-Requirement already satisfied: certifi in /home/username/.pyenv/versions/3.7.7/lib/python3.7/site-packages (from elasticsearch==7.7.1->-r etc/requirements.txt (line 1)) (2020.4.5.1)
+$ python setup.py install
 ```
 
 ## Configuration
