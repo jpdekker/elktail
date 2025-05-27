@@ -16,67 +16,52 @@ def connect():
         scheme=config['scheme'], port=config['port']
     )
 
-def get_search_body(iso_date, process_name, severity, hostname, query_size, sort_order, query_string=None): # MODIFIED: sort_order is now required (no default)
-    body = {
-        "size": query_size,
-        "sort": [
-            {
-                "@timestamp": {
-                    "order": sort_order
+def get_search_body(iso_date, process_name, severity, hostname, query_size=10000, sort_order="desc", query_string=None):
+    # Basis query met timestamp filter
+    must_conditions = [
+        {"range": {"@timestamp": {"gte": iso_date}}}
+    ]
+
+    # Voeg process name filter toe indien opgegeven
+    if process_name:
+        must_conditions.append({"match": {"process.name": process_name}})
+
+    # Voeg hostname filter toe indien opgegeven
+    if hostname:
+        must_conditions.append({"match": {"host.hostname": hostname}})
+
+    # Voeg severity filter toe
+    if severity:
+        if isinstance(severity, list):
+            # Voor een lijst van severities, gebruik terms query
+            must_conditions.append({
+                "terms": {
+                    "log.syslog.severity.name": severity
                 }
-            }
-        ],
+            })
+        else:
+            # Voor een enkele severity, gebruik match query
+            must_conditions.append({
+                "match": {
+                    "log.syslog.severity.name": severity
+                }
+            })
+
+    # Voeg query string toe indien opgegeven
+    if query_string:
+        must_conditions.append({"query_string": {"query": query_string}})
+
+    # Bouw de complete query
+    body = {
+        "sort": [{"@timestamp": sort_order}],
+        "size": query_size,
         "query": {
             "bool": {
-                "must": [
-                    {
-                        "range": {
-                            "@timestamp": {
-                                "gte": f"{iso_date}"
-                            }
-                        }
-                    }
-                ]
+                "must": must_conditions
             }
         }
     }
-    
-    if hostname is not None:
-        body['query']['bool']['must'].append(
-            {
-                'wildcard': {
-                    'host.hostname': f"*{hostname}*"
-                }
-            }
-        )
-    
-    if process_name is not None:
-        body['query']['bool']['must'].append(
-            {
-                'term': {
-                    'process.name': process_name
-                }
-            }
-        )
-    
-    if severity is not None:
-        body['query']['bool']['must'].append(
-            {
-                'match': {
-                    'log.syslog.severity.name': severity
-                }
-            }
-        )
 
-    if query_string is not None: # ADDED: query_string filter
-        body['query']['bool']['must'].append(
-            {
-                'match': {
-                    'message': query_string
-                }
-            }
-        )
-    
     return body
 
 def search(es, body):
