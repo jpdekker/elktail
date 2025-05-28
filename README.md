@@ -1,164 +1,21 @@
 # ELKTAIL
 
-## Description
-
-ELKTAIL is a tool that generates a tail-like stream from a filebeat index
-in elasticsearch.
-
-Currently it depends that the the index template has the following fields:
-
-* fields.project.keyword
-* fields.process_type.keyword
-* fields.environment.keyword
-
-**Future versions:** Won't have this requirement since it will allow KQL 
-language directly.
-
-## Installation
-
-The tools gets installed globally on your system so it requires root
-permissions. Its final destination will be /usr/local/elktail.
-
-### Download the latest release
-
-* [0.3](https://git.decco.net/jpdekker/elktail.git)
-
-### Clone the project
-
-```bash
-$ git clone git@github.com:BridgeMarketing/elktail.git
-$ cd elktail/
-$ python setup.py install
-```
-
-## Configuration
-
-The first time this tool gets executed (or if the configuration file is
-missing) the initial configuration process kicks in. The configuration file
-is stored in `/etc/elktail.conf`. The following parameters will be requested:
-
-* host: url or ip of the elasticsearch that contains the filebeat indexes
-* username: user that has permissions to connect to the given elasticsearch
-* password: password of the username
-* scheme: it's really REALLY weird the this parameter be anything by https
-* port: port where elasticsearch is listening
-
-Note: You need sudo privileges to create the configuration file as it's stored in `/etc/elktail.conf`.
-
-```bash
-$ sudo elktail
-your elktail is not configured
-would you like to configure it now? <Y/n>: y
-creating configuration file: /etc/elktail.conf
-elasticsearch host: 127.0.0.1
-username: username
-password: MySecretPassword
-scheme (HIGLY recommended https): https
-port: 9243
-elktail configured
-$ cat /etc/elktail.conf
-[default]
-host = 127.0.0.1
-username = username
-password = MySecretPassword
-scheme = https
-port = 9243
-```
-
-The password will be stored in **plain text** so make sure it has 0400
-permissions. I'll explore a way of encrypting this password.
-
-## Usage
-
-```bash
-elktail [options]
-```
-
-Options:
-  * `-h, --help`: Show this help message and exit
-  * `-p PROCESS_NAME, --process=PROCESS_NAME`: Filter by process name
-  * `-s SEVERITY, --severity=SEVERITY`: Filter by log severity level (e.g., Informational, Warning, Error)
-  * `-H HOSTNAME, --hostname=HOSTNAME`: Filter by hostname
-  * `-q QUERY_STRING, --query=QUERY_STRING`: Search for specific text in log messages
-  * `-f, --follow`: Follow log output (like tail -f)
-  * `-n LIMIT, --lines=LIMIT`: Number of initial lines to show (default: 10)
-  * `-d DAYS, --days=DAYS`: Number of days to look back (default: 7)
-  * `-v, --verbose`: Increase output verbosity (-v shows Notice and Informational, -vv adds Debug)
-
-**Time Range:**
-By default, elktail looks back 7 days for both normal and follow mode. You can adjust this using the `-d` option:
-
-```bash
-# Look back 3 days
-elktail -d 3
-
-# Follow mode with 14 days of history
-elktail -f -d 14
-```
-
-* Arguments can be used at the same time or no arguments at all
-* Arguments works as **and**
-
-### No arguments
-
-Executing elktail with no arguments, will **tailf** everything in the filebeat
-indexes.
-
-```
-$ elktail
-2020-06-30T21:27:32.227Z :: [2020-06-30 21:27:32,227: INFO/MainProcess] Received task: tasks.s3_campaigns.monitor_incoming_files.monitor[acc61ad7-5890-41d6-8fa0-93e5547df61a]
-2020-06-30T21:27:47.289Z :: [2020-06-30 21:27:47,289: INFO/ForkPoolWorker-66] Task tasks.reports.check_scheduled_reports.check_something[668d7f0e-7a86-4cb1-9e55-6197a8a1a6a3] succeeded in 0.006264386989641935s: True
-2020-06-30T21:27:05.222Z :: [2020-06-30 21:27:05,222: INFO/ForkPoolWorker-287] Task tasks.reports.check_scheduled_reports.check_something[2c55f42e-2bbf-4448-9445-5f16a90338bd] succeeded in 0.003620134957600385s: True
-```
-
-# ELKTAIL
-
-### Log Severity Levels
-
-ELKTail uses standard syslog severity levels (RFC 5424) for filtering logs. The severity levels, from most severe to least severe, are:
-
-* **Emergency (0)**: System is unusable
-* **Alert (1)**: Action must be taken immediately
-* **Critical (2)**: Critical conditions
-* **Error (3)**: Error conditions
-* **Warning (4)**: Warning conditions
-* **Notice (5)**: Normal but significant conditions
-* **Informational (6)**: Informational messages
-* **Debug (7)**: Debug-level messages
-
-By default (no -v flag), ELKTail shows:
-* Emergency through Warning messages
-
-With `-v`, ELKTail shows:
-* Emergency through Warning (default)
-* Notice and Informational messages
-
-With `-vv`, ELKTail shows:
-* All messages including Debug level
-
-You can explicitly filter for a specific severity using the `-s` flag:
-```bash
-elktail -s Error          # Show only Error messages
-elktail -s Warning -v     # Show Warning messages with verbosity formatting
-```
+ELKTAIL is a command-line tool that generates a tail-like stream from Filebeat indices in Elasticsearch, allowing you to monitor and search logs in real-time.
 
 ## Features
 
-*   **Real-time Log Tailing**: Follow logs as they are indexed into Elasticsearch, similar to `tail -f`.
-*   **Historical Log Search**: Fetch and display a specified number of recent log entries.
-*   **Filtering**:
-    *   Filter logs by process name (`-p` or `--process`).
-    *   Filter logs by severity level (`-s` or `--severity`) (e.g., Informational, Warning, Error).
-    *   Filter logs by hostname (`-H` or `--hostname`).
-    *   **NEW**: Filter logs by a query string within the message content (`-q` or `--query`).
-*   **Configurable Output**:
-    *   Control the number of initial lines displayed (`-n` or `--lines`).
-    *   Adjust verbosity to show more or less detail (`-v`, `-vv`).
-    *   **IMPROVED**: Severity text (e.g., `[Error]`, `[Warning]`) is now always displayed for clarity.
-*   **Timezone Conversion**: Timestamps are converted to `Europe/Amsterdam` for readability.
-*   **Duplicate Prevention**: Avoids displaying duplicate log entries within a fetched batch.
-*   **IMPROVED**: More efficient fetching of the last N lines when not in follow mode, ensuring the *actual* most recent N lines are shown chronologically.
+* **Real-time Log Tailing**: Follow logs as they are indexed into Elasticsearch (similar to `tail -f`)
+* **Historical Log Search**: Access and display recent log entries with configurable time ranges
+* **Flexible Filtering**:
+  * Process name filtering (`-p` or `--process`)
+  * Severity level filtering (`-s` or `--severity`)
+  * Hostname filtering (`-H` or `--hostname`)
+  * Message content filtering (`-q` or `--query`)
+* **Configurable Output**:
+  * Adjustable initial line count (`-n` or `--lines`)
+  * Verbosity control (`-v`, `-vv`)
+  * Clear severity level indicators (`[Error]`, `[Warning]`, etc.)
+* **Smart Configuration**: Automatically creates and manages configuration in the current directory
 
-## Installation
 
 
