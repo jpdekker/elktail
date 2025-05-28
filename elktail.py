@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore', category=Warning)
 def get_config():
     """Get configuration from system or user config file."""
     system_config = '/etc/elktail.conf'
-    user_config = os.path.join(os.environ.get("HOME"), "/etc/elktail.conf")
+    user_config = os.path.join(os.environ.get("HOME"), ".elktail.conf")
     config_path = system_config if os.path.exists(system_config) else user_config
 
     if not os.path.exists(config_path):
