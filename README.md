@@ -17,5 +17,14 @@ ELKTAIL is a command-line tool that generates a tail-like stream from Filebeat i
   * Clear severity level indicators (`[Error]`, `[Warning]`, etc.)
 * **Smart Configuration**: Automatically creates and manages configuration in the current directory
 
+## Installation
+
+```bash
+git clone https://git.decco.net/jpdekker/elktail.git
+cd elktail
+chmod +x elktail.py
+sudo cp elktail.py /usr/local/bin/elktail
+```
+
 
 
