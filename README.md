@@ -1,6 +1,6 @@
 # ELKTAIL
 
-ELKTAIL is a command-line tool that generates a tail-like stream from Filebeat indices in Elasticsearch, allowing you to monitor and search logs in real-time.
+ELKTAIL is a command-line tool that generates a tail-like stream from syslog indices in Elasticsearch, allowing you to monitor and search logs in real-time.
 
 ## Features
 
